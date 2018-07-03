@@ -2,6 +2,7 @@ use rocksdb;
 
 use std::path::{Path, PathBuf};
 
+use hex;
 use util::Bytes;
 
 #[derive(Clone)]
@@ -86,6 +87,41 @@ impl DBStore {
         self.db.compact_range(None, None); // would take a while
         info!("finished full compaction");
     }
+
+    pub fn max_collision(&self, prefix: &[u8]) {
+        let prefix_len = prefix.len();
+        let mut iter = self.db.raw_iterator();
+        iter.seek(prefix);
+        let mut prev: Option<Vec<u8>> = None;
+        let mut collision_max = 0;
+        while iter.valid() {
+            let key = &iter.key().unwrap();
+            if !key.starts_with(prefix) {
+                break;
+            }
+            if let Some(prev) = prev {
+                let collision_len = prev.iter()
+                    .zip(key.iter())
+                    .take_while(|(a, b)| a == b)
+                    .count();
+                if collision_len > collision_max {
+                    eprintln!(
+                        "{} bytes collision found:\n{:?}\n{:?}\n",
+                        collision_len - prefix_len,
+                        revhex(&prev[prefix_len..]),
+                        revhex(&key[prefix_len..]),
+                    );
+                    collision_max = collision_len;
+                }
+            }
+            prev = Some(key.to_vec());
+            iter.next();
+        }
+    }
+}
+
+fn revhex(value: &[u8]) -> String {
+    hex::encode(&value.iter().cloned().rev().collect::<Vec<u8>>())
 }
 
 impl ReadStore for DBStore {
