@@ -1,5 +1,4 @@
 use base64;
-use bitcoin::blockdata::block::{Block, BlockHeader};
 use bitcoin::blockdata::transaction::Transaction;
 use bitcoin::network::serialize::BitcoinHash;
 use bitcoin::network::serialize::{deserialize, serialize};
@@ -13,18 +12,21 @@ use std::net::{SocketAddr, TcpStream};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-
 use metrics::{HistogramOpts, HistogramVec, Metrics};
 use signal::Waiter;
 use util::HeaderList;
-
 use errors::*;
+use bitcoin::blockdata::liquid::LiquidBlockHeader;
+use bitcoin::blockdata::liquid::LiquidBlock;
+use bitcoin::blockdata::liquid::LiquidTransaction;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Network {
     Mainnet,
     Testnet,
     Regtest,
+    Liquid,
+    LiquidRegtest,
 }
 
 fn parse_hash(value: &Value) -> Result<Sha256dHash> {
@@ -35,21 +37,21 @@ fn parse_hash(value: &Value) -> Result<Sha256dHash> {
     ).chain_err(|| format!("non-hex value: {}", value))?)
 }
 
-fn header_from_value(value: Value) -> Result<BlockHeader> {
+fn header_from_value(value: Value) -> Result<LiquidBlockHeader> {
     let header_hex = value
         .as_str()
         .chain_err(|| format!("non-string header: {}", value))?;
-    let header_bytes = hex::decode(header_hex).chain_err(|| "non-hex header")?;
+    let header_bytes = hex::decode(&header_hex).chain_err(|| "non-hex header")?;
     Ok(deserialize(&header_bytes).chain_err(|| format!("failed to parse header {}", header_hex))?)
 }
 
-fn block_from_value(value: Value) -> Result<Block> {
+fn block_from_value(value: Value) -> Result<LiquidBlock> {
     let block_hex = value.as_str().chain_err(|| "non-string block")?;
     let block_bytes = hex::decode(block_hex).chain_err(|| "non-hex block")?;
     Ok(deserialize(&block_bytes).chain_err(|| format!("failed to parse block {}", block_hex))?)
 }
 
-fn tx_from_value(value: Value) -> Result<Transaction> {
+fn tx_from_value(value: Value) -> Result<LiquidTransaction> {
     let tx_hex = value.as_str().chain_err(|| "non-string tx")?;
     let tx_bytes = hex::decode(tx_hex).chain_err(|| "non-hex tx")?;
     Ok(deserialize(&tx_bytes).chain_err(|| format!("failed to parse tx {}", tx_hex))?)
@@ -100,9 +102,7 @@ pub struct BlockchainInfo {
     blocks: u32,
     headers: u32,
     bestblockhash: String,
-    size_on_disk: u64,
     pruned: bool,
-    initialblockdownload: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -309,11 +309,7 @@ impl Daemon {
         }
         let blockchain_info = daemon.getblockchaininfo()?;
         info!("{:?}", blockchain_info);
-        if blockchain_info.initialblockdownload == true {
-            bail!(ErrorKind::Connection(
-                "wait until bitcoin is synced (i.e. initialblockdownload = false)".to_owned()
-            ))
-        }
+
         if blockchain_info.pruned == true {
             bail!("pruned node is not supported (use '-prune=0' bitcoind flag)".to_owned())
         }
@@ -350,6 +346,8 @@ impl Daemon {
             Network::Mainnet => 0xD9B4BEF9,
             Network::Testnet => 0x0709110B,
             Network::Regtest => 0xDAB5BFFA,
+            Network::Liquid => 0xDBB5BFFA,         // TODO check
+            Network::LiquidRegtest => 0xDAB5BFFA,  // TODO check
         }
     }
 
@@ -428,14 +426,15 @@ impl Daemon {
         parse_hash(&self.request("getbestblockhash", json!([]))?).chain_err(|| "invalid blockhash")
     }
 
-    pub fn getblockheader(&self, blockhash: &Sha256dHash) -> Result<BlockHeader> {
+    pub fn getblockheader(&self, blockhash: &Sha256dHash) -> Result<LiquidBlockHeader> {
+        info!("hash: {}", blockhash.be_hex_string());
         header_from_value(self.request(
             "getblockheader",
             json!([blockhash.be_hex_string(), /*verbose=*/ false]),
         )?)
     }
 
-    pub fn getblockheaders(&self, heights: &[usize]) -> Result<Vec<BlockHeader>> {
+    pub fn getblockheaders(&self, heights: &[usize]) -> Result<Vec<LiquidBlockHeader>> {
         let heights: Vec<Value> = heights.iter().map(|height| json!([height])).collect();
         let params_list: Vec<Value> = self
             .requests("getblockhash", &heights)?
@@ -449,7 +448,7 @@ impl Daemon {
         Ok(result)
     }
 
-    pub fn getblock(&self, blockhash: &Sha256dHash) -> Result<Block> {
+    pub fn getblock(&self, blockhash: &Sha256dHash) -> Result<LiquidBlock> {
         let block = block_from_value(self.request(
             "getblock",
             json!([blockhash.be_hex_string(), /*verbose=*/ false]),
@@ -458,7 +457,7 @@ impl Daemon {
         Ok(block)
     }
 
-    pub fn getblocks(&self, blockhashes: &[Sha256dHash]) -> Result<Vec<Block>> {
+    pub fn getblocks(&self, blockhashes: &[Sha256dHash]) -> Result<Vec<LiquidBlock>> {
         let params_list: Vec<Value> = blockhashes
             .iter()
             .map(|hash| json!([hash.be_hex_string(), /*verbose=*/ false]))
@@ -475,7 +474,7 @@ impl Daemon {
         &self,
         txhash: &Sha256dHash,
         blockhash: Option<Sha256dHash>,
-    ) -> Result<Transaction> {
+    ) -> Result<LiquidTransaction> {
         let mut args = json!([txhash.be_hex_string(), /*verbose=*/ false]);
         if let Some(blockhash) = blockhash {
             args.as_array_mut()
@@ -500,7 +499,7 @@ impl Daemon {
         Ok(self.request("getrawtransaction", args)?)
     }
 
-    pub fn gettransactions(&self, txhashes: &[&Sha256dHash]) -> Result<Vec<Transaction>> {
+    pub fn gettransactions(&self, txhashes: &[&Sha256dHash]) -> Result<Vec<LiquidTransaction>> {
         let params_list: Vec<Value> = txhashes
             .iter()
             .map(|txhash| json!([txhash.be_hex_string(), /*verbose=*/ false]))
@@ -548,7 +547,7 @@ impl Daemon {
         )
     }
 
-    fn get_all_headers(&self, tip: &Sha256dHash) -> Result<Vec<BlockHeader>> {
+    fn get_all_headers(&self, tip: &Sha256dHash) -> Result<Vec<LiquidBlockHeader>> {
         let info: Value = self.request("getblockheader", json!([tip.be_hex_string()]))?;
         let tip_height = info
             .get("height")
@@ -568,7 +567,7 @@ impl Daemon {
 
         let mut blockhash = null_hash;
         for header in &result {
-            assert_eq!(header.prev_blockhash, blockhash);
+            assert_eq!(header.prev_blockhash, blockhash);  //TODO this fucks off because I added a zero to parse the 79 bytes header
             blockhash = header.bitcoin_hash();
         }
         assert_eq!(blockhash, *tip);
@@ -580,7 +579,7 @@ impl Daemon {
         &self,
         indexed_headers: &HeaderList,
         bestblockhash: &Sha256dHash,
-    ) -> Result<Vec<BlockHeader>> {
+    ) -> Result<Vec<LiquidBlockHeader>> {
         // Iterate back over headers until known blockash is found:
         if indexed_headers.len() == 0 {
             return self.get_all_headers(bestblockhash);
@@ -600,7 +599,7 @@ impl Daemon {
             let header = self
                 .getblockheader(&blockhash)
                 .chain_err(|| format!("failed to get {} header", blockhash))?;
-            new_headers.push(header);
+            new_headers.push(header.clone());
             blockhash = header.prev_blockhash;
         }
         trace!("downloaded {} block headers", new_headers.len());

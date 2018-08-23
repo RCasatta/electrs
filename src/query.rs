@@ -1,4 +1,3 @@
-use bitcoin::blockdata::block::Block;
 use bitcoin::blockdata::transaction::Transaction;
 use bitcoin::network::serialize::deserialize;
 use bitcoin::util::hash::Sha256dHash;
@@ -6,6 +5,7 @@ use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use bitcoin::blockdata::liquid::LiquidTransaction;
 
 use app::App;
 use index::{compute_script_hash, TxInRow, TxOutRow, TxRow};
@@ -16,6 +16,7 @@ use store::{ReadStore, Row};
 use util::{FullHash, HashPrefix, HeaderEntry};
 
 use errors::*;
+use bitcoin::blockdata::liquid::LiquidBlock;
 
 pub struct FundingOutput {
     pub txn_id: Sha256dHash,
@@ -111,7 +112,7 @@ impl Status {
 }
 
 struct TxnHeight {
-    txn: Transaction,
+    txn: LiquidTransaction,
     height: u32,
 }
 
@@ -156,7 +157,7 @@ fn txids_by_funding_output(
 }
 
 struct TransactionCache {
-    map: RwLock<HashMap<Sha256dHash, Transaction>>,
+    map: RwLock<HashMap<Sha256dHash, LiquidTransaction>>,
 }
 
 impl TransactionCache {
@@ -166,9 +167,9 @@ impl TransactionCache {
         }
     }
 
-    fn get_or_else<F>(&self, txid: &Sha256dHash, load_txn_func: F) -> Result<Transaction>
+    fn get_or_else<F>(&self, txid: &Sha256dHash, load_txn_func: F) -> Result<LiquidTransaction>
     where
-        F: FnOnce() -> Result<Transaction>,
+        F: FnOnce() -> Result<LiquidTransaction>,
     {
         if let Some(txn) = self.map.read().unwrap().get(txid) {
             return Ok(txn.clone());
@@ -256,7 +257,7 @@ impl Query {
                     txn_id: txn_id,
                     height: t.height,
                     output_index: index,
-                    value: output.value,
+                    value: 0,  // TODO mockup, handle the case when the amount is clear text
                 })
             }
         }
@@ -344,7 +345,7 @@ impl Query {
     }
 
     // Internal API for transaction retrieval
-    fn load_txn(&self, tx_hash: &Sha256dHash, block_height: u32) -> Result<Transaction> {
+    fn load_txn(&self, tx_hash: &Sha256dHash, block_height: u32) -> Result<LiquidTransaction> {
         let blockhash = self.lookup_confirmed_blockhash(tx_hash, Some(block_height))?;
         self.app.daemon().gettransaction(tx_hash, blockhash)
     }
@@ -380,7 +381,7 @@ impl Query {
             .index()
             .get_header(height)
             .chain_err(|| format!("missing block #{}", height))?;
-        let block: Block = self.app.daemon().getblock(&header_entry.hash())?;
+        let block: LiquidBlock = self.app.daemon().getblock(&header_entry.hash())?;
         let mut txids: Vec<Sha256dHash> = block.txdata.iter().map(|tx| tx.txid()).collect();
         let pos = txids
             .iter()

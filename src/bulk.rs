@@ -1,4 +1,3 @@
-use bitcoin::blockdata::block::Block;
 use bitcoin::network::serialize::BitcoinHash;
 use bitcoin::network::serialize::SimpleDecoder;
 use bitcoin::network::serialize::{deserialize, RawDecoder};
@@ -21,6 +20,7 @@ use store::{DBStore, ReadStore, Row, WriteStore};
 use util::{spawn_thread, HeaderList, SyncChannel};
 
 use errors::*;
+use bitcoin::blockdata::liquid::LiquidBlock;
 
 fn finish_marker_row() -> Row {
     Row {
@@ -120,7 +120,7 @@ impl Parser {
     }
 }
 
-fn parse_blocks(blob: Vec<u8>, magic: u32) -> Result<Vec<Block>> {
+fn parse_blocks(blob: Vec<u8>, magic: u32) -> Result<Vec<LiquidBlock>> {
     let mut cursor = Cursor::new(&blob);
     let mut blocks = vec![];
     let max_pos = blob.len() as u64;
@@ -147,7 +147,7 @@ fn parse_blocks(blob: Vec<u8>, magic: u32) -> Result<Vec<Block>> {
             .chain_err(|| format!("seek {} failed", block_size))?;
         let end = cursor.position() as usize;
 
-        let block: Block = deserialize(&blob[start..end])
+        let block: LiquidBlock = deserialize(&blob[start..end])
             .chain_err(|| format!("failed to parse block at {}..{}", start, end))?;
         blocks.push(block);
     }
@@ -187,6 +187,7 @@ fn start_reader(blk_files: Vec<PathBuf>, parser: Arc<Parser>) -> (BlobReceiver, 
     let blobs = chan.sender();
     let handle = spawn_thread("bulk_read", move || -> Result<()> {
         for path in blk_files {
+            info!("reading {:?}", path);
             blobs
                 .send((parser.read_blkfile(&path)?, path))
                 .expect("failed to send blk*.dat contents");
@@ -204,6 +205,7 @@ fn start_indexer(
     spawn_thread("bulk_index", move || -> Result<()> {
         loop {
             let msg = blobs.lock().unwrap().recv();
+            info!("received message");
             if let Ok((blob, path)) = msg {
                 let rows = parser
                     .index_blkfile(blob)

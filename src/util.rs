@@ -1,4 +1,3 @@
-use bitcoin::blockdata::block::BlockHeader;
 use bitcoin::network::serialize::BitcoinHash;
 use bitcoin::util::hash::Sha256dHash;
 use std::collections::HashMap;
@@ -8,9 +7,10 @@ use std::slice;
 use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
 use std::thread;
 use time;
+use bitcoin::blockdata::liquid::LiquidBlockHeader;
 
 pub type Bytes = Vec<u8>;
-pub type HeaderMap = HashMap<Sha256dHash, BlockHeader>;
+pub type HeaderMap = HashMap<Sha256dHash, LiquidBlockHeader>;
 
 // TODO: consolidate serialization/deserialize code for bincode/bitcoin.
 const HASH_LEN: usize = 32;
@@ -31,7 +31,7 @@ pub fn full_hash(hash: &[u8]) -> FullHash {
 pub struct HeaderEntry {
     height: usize,
     hash: Sha256dHash,
-    header: BlockHeader,
+    header: LiquidBlockHeader,
 }
 
 impl HeaderEntry {
@@ -39,7 +39,7 @@ impl HeaderEntry {
         &self.hash
     }
 
-    pub fn header(&self) -> &BlockHeader {
+    pub fn header(&self) -> &LiquidBlockHeader {
         &self.header
     }
 
@@ -78,11 +78,11 @@ impl HeaderList {
         }
     }
 
-    pub fn order(&self, new_headers: Vec<BlockHeader>) -> Vec<HeaderEntry> {
+    pub fn order(&self, new_headers: Vec<LiquidBlockHeader>) -> Vec<HeaderEntry> {
         // header[i] -> header[i-1] (i.e. header.last() is the tip)
         struct HashedHeader {
             blockhash: Sha256dHash,
-            header: BlockHeader,
+            header: LiquidBlockHeader,
         }
         let hashed_headers =
             Vec::<HashedHeader>::from_iter(new_headers.into_iter().map(|header| HashedHeader {

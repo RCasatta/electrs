@@ -67,8 +67,8 @@ fn jsonify_header(entry: &HeaderEntry) -> Value {
         "prev_block_hash": header.prev_blockhash.be_hex_string(),
         "merkle_root": header.merkle_root.be_hex_string(),
         "timestamp": header.time,
-        "bits": header.bits,
-        "nonce": header.nonce
+        "bits": 1,
+        "nonce": 1
     })
 }
 

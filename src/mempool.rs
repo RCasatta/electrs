@@ -1,4 +1,4 @@
-use bitcoin::blockdata::transaction::Transaction;
+use bitcoin::blockdata::liquid::LiquidTransaction;
 use bitcoin::util::hash::Sha256dHash;
 use hex;
 use std::collections::BTreeMap;
@@ -28,7 +28,7 @@ impl MempoolStore {
         }
     }
 
-    fn add(&mut self, tx: &Transaction) {
+    fn add(&mut self, tx: &LiquidTransaction) {
         let mut map = self.map.write().unwrap();
         let mut rows = vec![];
         index_transaction(tx, 0, &mut rows);
@@ -38,7 +38,7 @@ impl MempoolStore {
         }
     }
 
-    fn remove(&mut self, tx: &Transaction) {
+    fn remove(&mut self, tx: &LiquidTransaction) {
         let mut map = self.map.write().unwrap();
         let mut rows = vec![];
         index_transaction(tx, 0, &mut rows);
@@ -93,7 +93,7 @@ impl ReadStore for MempoolStore {
 }
 
 struct Item {
-    tx: Transaction,     // stored for faster retrieval and index removal
+    tx: LiquidTransaction,     // stored for faster retrieval and index removal
     entry: MempoolEntry, // caches mempool fee rates
 }
 
@@ -173,7 +173,7 @@ impl Tracker {
         }
     }
 
-    pub fn get_txn(&self, txid: &Sha256dHash) -> Option<Transaction> {
+    pub fn get_txn(&self, txid: &Sha256dHash) -> Option<LiquidTransaction> {
         self.items.get(txid).map(|stats| stats.tx.clone())
     }
 
@@ -240,7 +240,7 @@ impl Tracker {
         Ok(())
     }
 
-    fn add(&mut self, txid: &Sha256dHash, tx: Transaction, entry: MempoolEntry) {
+    fn add(&mut self, txid: &Sha256dHash, tx: LiquidTransaction, entry: MempoolEntry) {
         self.index.add(&tx);
         self.items.insert(*txid, Item { tx, entry });
     }

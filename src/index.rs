@@ -1,6 +1,4 @@
 use bincode;
-use bitcoin::blockdata::block::{Block, BlockHeader};
-use bitcoin::blockdata::transaction::{Transaction, TxIn, TxOut};
 use bitcoin::network::serialize::BitcoinHash;
 use bitcoin::network::serialize::{deserialize, serialize};
 use bitcoin::util::hash::Sha256dHash;
@@ -9,6 +7,8 @@ use crypto::sha2::Sha256;
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 use std::sync::RwLock;
+use bitcoin::blockdata::liquid::LiquidBlockHeader;
+use bitcoin::blockdata::liquid::LiquidTransaction;
 
 use daemon::Daemon;
 use metrics::{Counter, Gauge, HistogramOpts, HistogramTimer, HistogramVec, MetricOpts, Metrics};
@@ -20,6 +20,9 @@ use util::{
 };
 
 use errors::*;
+use bitcoin::blockdata::liquid::LiquidBlock;
+use bitcoin::blockdata::liquid::LiquidTxOut;
+use bitcoin::blockdata::liquid::LiquidTxIn;
 
 #[derive(Serialize, Deserialize)]
 pub struct TxInKey {
@@ -35,7 +38,7 @@ pub struct TxInRow {
 }
 
 impl TxInRow {
-    pub fn new(txid: &Sha256dHash, input: &TxIn) -> TxInRow {
+    pub fn new(txid: &Sha256dHash, input: &LiquidTxIn) -> TxInRow {
         TxInRow {
             key: TxInKey {
                 code: b'I',
@@ -79,7 +82,7 @@ pub struct TxOutRow {
 }
 
 impl TxOutRow {
-    pub fn new(txid: &Sha256dHash, output: &TxOut) -> TxOutRow {
+    pub fn new(txid: &Sha256dHash, output: &LiquidTxOut) -> TxOutRow {
         TxOutRow {
             key: TxOutKey {
                 code: b'O',
@@ -167,7 +170,7 @@ pub fn compute_script_hash(data: &[u8]) -> FullHash {
     hash
 }
 
-pub fn index_transaction(txn: &Transaction, height: usize, rows: &mut Vec<Row>) {
+pub fn index_transaction(txn: &LiquidTransaction, height: usize, rows: &mut Vec<Row>) {
     let null_hash = Sha256dHash::default();
     let txid: Sha256dHash = txn.txid();
     for input in &txn.input {
@@ -183,7 +186,7 @@ pub fn index_transaction(txn: &Transaction, height: usize, rows: &mut Vec<Row>) 
     rows.push(TxRow::new(&txid, height as u32).to_row());
 }
 
-pub fn index_block(block: &Block, height: usize) -> Vec<Row> {
+pub fn index_block(block: &LiquidBlock, height: usize) -> Vec<Row> {
     let mut rows = vec![];
     for txn in &block.txdata {
         index_transaction(&txn, height, &mut rows);
@@ -226,7 +229,7 @@ fn read_indexed_headers(store: &ReadStore) -> HeaderList {
     let mut map = HeaderMap::new();
     for row in store.scan(b"B") {
         let key: BlockKey = bincode::deserialize(&row.key).unwrap();
-        let header: BlockHeader = deserialize(&row.value).unwrap();
+        let header: LiquidBlockHeader = deserialize(&row.value).unwrap();
         map.insert(deserialize(&key.hash).unwrap(), header);
     }
     let mut headers = vec![];
@@ -285,7 +288,7 @@ impl Stats {
         }
     }
 
-    fn update(&self, block: &Block, height: usize) {
+    fn update(&self, block: &LiquidBlock, height: usize) {
         self.blocks.inc();
         self.txns.inc_by(block.txdata.len() as i64);
         for tx in &block.txdata {

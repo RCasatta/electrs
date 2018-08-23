@@ -5,3 +5,6 @@ Cargo.lock
 *.sublime*
 *~
 *.pyc
+.idea/
+start.sh
+liquid_txs/

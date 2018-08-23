@@ -99,6 +99,8 @@ impl Config {
             "mainnet" => Network::Mainnet,
             "testnet" => Network::Testnet,
             "regtest" => Network::Regtest,
+            "liquid" => Network::Liquid,
+            "liquidregtest" => Network::LiquidRegtest,
             _ => panic!("unsupported Bitcoin network: {:?}", network_name),
         };
         let db_dir = Path::new(m.value_of("db_dir").unwrap_or("./db"));
@@ -108,16 +110,23 @@ impl Config {
             Network::Mainnet => 8332,
             Network::Testnet => 18332,
             Network::Regtest => 18443,
+            Network::Liquid => 10099,  // TODO check
+            Network::LiquidRegtest => 10199,  // TODO fix
         };
         let default_electrum_port = match network_type {
             Network::Mainnet => 50001,
             Network::Testnet => 60001,
             Network::Regtest => 60401,
+            Network::Liquid => 60402,  // TODO fix
+            Network::LiquidRegtest => 60403,  // TODO fix
         };
         let default_monitoring_port = match network_type {
             Network::Mainnet => 4224,
             Network::Testnet => 14224,
             Network::Regtest => 24224,
+            Network::Liquid => 24225,   // TODO fix
+            Network::LiquidRegtest => 24226,  // TODO fix
+
         };
 
         let daemon_rpc_addr: SocketAddr = m
@@ -148,6 +157,8 @@ impl Config {
             Network::Mainnet => (),
             Network::Testnet => daemon_dir.push("testnet3"),
             Network::Regtest => daemon_dir.push("regtest"),
+            Network::Liquid => daemon_dir.push("liquid"),
+            Network::LiquidRegtest => daemon_dir.push("liquidregtest"),
         }
         let cookie = m.value_of("cookie").map(|s| s.to_owned());
 
