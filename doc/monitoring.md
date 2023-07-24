@@ -18,5 +18,5 @@ Restart and check the collected metrics:
 
 ```
 $ sudo systemctl restart prometheus
-$ firefox 'http://localhost:9090/graph?g0.range_input=1h&g0.expr=index_height&g0.tab=0'
+$ firefox 'http://localhost:9090/graph?g0.range_input=1h&g0.expr=electrs_index_height&g0.tab=0'
 ```
