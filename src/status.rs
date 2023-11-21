@@ -23,6 +23,7 @@ use crate::{
     types::{bsl_txid, ScriptHash, SerBlock, StatusHash},
 };
 
+#[derive(Debug)]
 /// Given a scripthash, store relevant inputs and outputs of a specific transaction
 struct TxEntry {
     txid: Txid,
@@ -30,6 +31,7 @@ struct TxEntry {
     spent: Vec<OutPoint>,   // relevant spent outpoints
 }
 
+#[derive(Debug)]
 struct TxOutput {
     index: u32,
     value: Amount,
@@ -312,7 +314,7 @@ impl ScriptHashStatus {
     where
         B: IntoIterator<Item = BlockHash>,
         F: Fn(BlockHash, SerBlock) -> R + Send + Sync,
-        R: Send + Sync,
+        R: Send + Sync + std::fmt::Debug,
     {
         daemon.for_blocks(
             blockhashes

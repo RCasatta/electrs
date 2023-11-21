@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 pub(crate) type Row = Box<[u8]>;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct WriteBatch {
     pub(crate) height: usize,
     pub(crate) tip_row: Row,

@@ -21,7 +21,7 @@ use crossbeam_channel::{bounded, select, Receiver, Sender};
 
 use std::io::{self, ErrorKind, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::types::SerBlock;
@@ -97,7 +97,7 @@ impl Connection {
     where
         B: IntoIterator<Item = BlockHash>,
         F: Fn(BlockHash, SerBlock) -> R + Send + Sync,
-        R: Send + Sync,
+        R: Send + Sync + std::fmt::Debug,
     {
         self.blocks_duration.observe_duration("total", || {
             let blockhashes: Vec<BlockHash> = blockhashes.into_iter().collect();
@@ -110,50 +110,52 @@ impl Connection {
                 self.req_send.send(Request::get_blocks(&blockhashes))
             })?;
 
-            rayon::in_place_scope(|s| {
-                let (send, receive) = std::sync::mpsc::channel();
+            let result = Arc::new(Mutex::new(vec![]));
 
+            rayon::scope(|s| {
                 for hash in blockhashes {
-                    let block = self.blocks_duration.observe_duration("response", || {
-                        let block = self
-                            .blocks_recv
-                            .recv()
-                            .with_context(|| format!("failed to get block {}", hash))?;
-                        let header = bsl::BlockHeader::parse(&block[..])
-                            .expect("core returned invalid blockheader")
-                            .parsed_owned();
-                        ensure!(
-                            &header.block_hash_sha2()[..] == hash.as_byte_array(),
-                            "got unexpected block"
-                        );
-                        Ok(block)
-                    })?;
+                    let block = self
+                        .blocks_duration
+                        .observe_duration("response", || {
+                            let block = self
+                                .blocks_recv
+                                .recv()
+                                .with_context(|| format!("failed to get block {}", hash))?;
+                            let header = bsl::BlockHeader::parse(&block[..])
+                                .expect("core returned invalid blockheader")
+                                .parsed_owned();
+                            ensure!(
+                                &header.block_hash_sha2()[..] == hash.as_byte_array(),
+                                "got unexpected block"
+                            );
+                            Ok(block)
+                        })
+                        .unwrap(); //TODO
                     let func = &func;
                     let blocks_duration = &self.blocks_duration;
-                    let send = send.clone();
+                    let result = result.clone();
                     debug!("spawning task for {}", hash);
                     s.spawn(move |_| {
                         debug!("processing {}", hash);
                         let r = blocks_duration.observe_duration("process", || func(hash, block));
-                        let _ = send.send(r);
+                        result.lock().unwrap().push(r); // TODO
                     });
                 }
-                debug!("waiting for {} blocks", blockhashes_len);
-                let result: Result<Vec<_>, std::sync::mpsc::RecvError> =
-                    (0..blockhashes_len).map(|_| receive.recv()).collect();
-                debug!("waited for {} blocks", blockhashes_len);
+            });
 
-                match result {
-                    Ok(result) => {
-                        if result.len() == blockhashes_len {
-                            Ok(result)
-                        } else {
-                            bail!("asked {blockhashes_len} blocks, returned {}", result.len(),);
-                        }
+            match Arc::<std::sync::Mutex<Vec<R>>>::try_unwrap(result)
+                .unwrap()
+                .into_inner()
+            {
+                Ok(result) => {
+                    if result.len() == blockhashes_len {
+                        Ok(result)
+                    } else {
+                        bail!("asked {blockhashes_len} blocks, returned {}", result.len(),);
                     }
-                    Err(e) => bail!("recv error {e:?}"),
                 }
-            })
+                Err(e) => bail!("recv error {e:?}"),
+            }
         })
     }
 

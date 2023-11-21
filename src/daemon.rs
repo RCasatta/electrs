@@ -233,7 +233,7 @@ impl Daemon {
     where
         B: IntoIterator<Item = BlockHash>,
         F: Fn(BlockHash, SerBlock) -> R + Send + Sync,
-        R: Send + Sync,
+        R: Send + Sync + std::fmt::Debug,
     {
         self.p2p.lock().for_blocks(blockhashes, func)
     }
