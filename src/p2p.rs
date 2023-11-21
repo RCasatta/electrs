@@ -110,7 +110,7 @@ impl Connection {
                 self.req_send.send(Request::get_blocks(&blockhashes))
             })?;
 
-            rayon::scope(|s| {
+            rayon::in_place_scope(|s| {
                 let (send, receive) = std::sync::mpsc::channel();
 
                 for hash in blockhashes {
@@ -141,6 +141,7 @@ impl Connection {
                 debug!("waiting for {} blocks", blockhashes_len);
                 let result: Result<Vec<_>, std::sync::mpsc::RecvError> =
                     (0..blockhashes_len).map(|_| receive.recv()).collect();
+                debug!("waited for {} blocks", blockhashes_len);
 
                 match result {
                     Ok(result) => {
