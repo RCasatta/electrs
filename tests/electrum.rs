@@ -12,8 +12,8 @@ use bitcoin::address;
 
 /// Test the Electrum RPC server using an headless Electrum wallet
 /// This only runs on Bitcoin (non-Liquid) mode.
-#[cfg_attr(not(feature = "liquid"), test)]
-#[cfg_attr(feature = "liquid", allow(dead_code))]
+#[cfg_attr(all(feature = "dev", not(feature = "liquid")), test)]
+#[cfg_attr(any(feature = "liquid", not(feature = "dev")), allow(dead_code))]
 fn test_electrum() -> Result<()> {
     // Spawn an Electrs Electrum RPC server
     let (electrum_server, electrum_addr, mut tester) = common::init_electrum_tester().unwrap();

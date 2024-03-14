@@ -43,3 +43,6 @@ jobs:
 
     - name: Tests (Liquid mode, REST)
       run: cargo test --features liquid
+
+    - name: Tests (no default features)
+      run: cargo test --no-default-features

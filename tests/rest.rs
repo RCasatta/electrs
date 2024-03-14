@@ -8,7 +8,8 @@ pub mod common;
 
 use common::Result;
 
-#[test]
+#[cfg_attr(feature = "dev", test)]
+#[cfg_attr(not(feature = "dev"), allow(dead_code))]
 fn test_rest() -> Result<()> {
     let (rest_handle, rest_addr, mut tester) = common::init_rest_tester().unwrap();
 

@@ -12,8 +12,10 @@ readme = "README.md"
 edition = "2018"
 
 [features]
+default = [ "dev" ]
 liquid = [ "elements" ]
 electrum-discovery = [ "electrum-client"]
+dev = [ "bitcoind/25_0", "electrumd/4_1_5", "elementsd/22_1_1" ]
 
 [dependencies]
 arraydeque = "0.5.1"
@@ -58,9 +60,9 @@ electrum-client = { version = "0.8", optional = true }
 
 
 [dev-dependencies]
-bitcoind = { version = "0.34", features = [ "25_0" ] }
-elementsd = { version = "0.9", features = [ "22_1_1" ] }
-electrumd = { version = "0.1.0", features = [ "4_1_5" ] }
+bitcoind = { version = "0.34" }
+elementsd = { version = "0.9" }
+electrumd = { version = "0.1.0" }
 ureq = { version = "2.9", default-features = false, features = [ "json" ] }
 tempfile = "3.10"
 
