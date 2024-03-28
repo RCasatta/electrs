@@ -35,7 +35,7 @@
 
           commonArgs = {
             inherit src buildInputs nativeBuildInputs;
-            cargoExtraArgs = "--no-default-features";  # avoid autodownload feature, which cannot happen in nix for deterministism
+            cargoExtraArgs = "--no-default-features --features liquid";  # avoid autodownload feature, which cannot happen in nix for deterministism
             LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
