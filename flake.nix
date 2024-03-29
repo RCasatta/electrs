@@ -35,25 +35,36 @@
 
           commonArgs = {
             inherit src buildInputs nativeBuildInputs;
-            cargoExtraArgs = "--no-default-features --features liquid";  # avoid autodownload feature, which cannot happen in nix for deterministism
+            cargoExtraArgs = "--no-default-features";  # avoid autodownload feature, which cannot happen in nix for deterministism
             LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
           bin = craneLib.buildPackage (commonArgs // {
             inherit cargoArtifacts;
-            # doCheck = false;
+            cargoExtraArgs = "--no-default-features";
+          });
+          binLiquid = craneLib.buildPackage (commonArgs // {
+            inherit cargoArtifacts;
+            cargoExtraArgs = "--no-default-features --features liquid";
           });
 
         in
         with pkgs;
         {
-          packages =
-            {
-              # that way we can build `bin` specifically,
-              # but it's also the default.
-              inherit bin;
-              default = bin;
-            };
+          packages = {
+            # that way we can build `bin` specifically,
+            # but it's also the default.
+            inherit bin;
+            default = bin;
+          };
+          apps."blockstream-electrs-liquid" = {
+            type = "app";
+            program = "${binLiquid}/bin/electrs";
+          };
+          apps."blockstream-electrs" = {
+            type = "app";
+            program = "${bin}/bin/electrs";
+          };
 
           devShells.default = mkShell {
             inputsFrom = [ bin ];
