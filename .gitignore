@@ -5,3 +5,5 @@ Cargo.lock
 *.sublime*
 *~
 *.pyc
+result
+.direnv/
