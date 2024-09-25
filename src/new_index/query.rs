@@ -118,11 +118,9 @@ impl Query {
             .or_else(|| self.mempool().lookup_raw_txn(txid))
     }
 
-    pub fn lookup_txos(&self, outpoints: BTreeSet<OutPoint>) -> HashMap<OutPoint, TxOut> {
+    pub fn lookup_txos(&self, outpoints: BTreeSet<OutPoint>) -> Result<HashMap<OutPoint, TxOut>> {
         // the mempool lookup_txos() internally looks up confirmed txos as well
-        self.mempool()
-            .lookup_txos(outpoints)
-            .expect("failed loading txos")
+        self.mempool().lookup_txos(outpoints)
     }
 
     pub fn lookup_spend(&self, outpoint: &OutPoint) -> Option<SpendingInput> {

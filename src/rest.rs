@@ -457,7 +457,7 @@ fn prepare_txs(
     txs: Vec<(Transaction, Option<BlockId>)>,
     query: &Query,
     config: &Config,
-) -> Vec<TransactionValue> {
+) -> Result<Vec<TransactionValue>, HttpError> {
     let outpoints = txs
         .iter()
         .flat_map(|(tx, _)| {
@@ -468,11 +468,12 @@ fn prepare_txs(
         })
         .collect();
 
-    let prevouts = query.lookup_txos(outpoints);
+    let prevouts = query.lookup_txos(outpoints)?;
 
-    txs.into_iter()
+    Ok(txs
+        .into_iter()
         .map(|(tx, blockid)| TransactionValue::new(tx, blockid, &prevouts, config))
-        .collect()
+        .collect())
 }
 
 #[tokio::main]
@@ -726,7 +727,7 @@ fn handle_request(
             // XXX orphraned blocks alway get TTL_SHORT
             let ttl = ttl_by_depth(confirmed_blockid.map(|b| b.height), query);
 
-            json_response(prepare_txs(txs, query, config), ttl)
+            json_response(prepare_txs(txs, query, config)?, ttl)
         }
         (&Method::GET, Some(script_type @ &"address"), Some(script_str), None, None, None)
         | (&Method::GET, Some(script_type @ &"scripthash"), Some(script_str), None, None, None) => {
@@ -777,7 +778,7 @@ fn handle_request(
                     .map(|(tx, blockid)| (tx, Some(blockid))),
             );
 
-            json_response(prepare_txs(txs, query, config), TTL_SHORT)
+            json_response(prepare_txs(txs, query, config)?, TTL_SHORT)
         }
 
         (
@@ -810,7 +811,7 @@ fn handle_request(
                 .map(|(tx, blockid)| (tx, Some(blockid)))
                 .collect();
 
-            json_response(prepare_txs(txs, query, config), TTL_SHORT)
+            json_response(prepare_txs(txs, query, config)?, TTL_SHORT)
         }
         (
             &Method::GET,
@@ -837,7 +838,7 @@ fn handle_request(
                 .map(|tx| (tx, None))
                 .collect();
 
-            json_response(prepare_txs(txs, query, config), TTL_SHORT)
+            json_response(prepare_txs(txs, query, config)?, TTL_SHORT)
         }
 
         (
@@ -880,7 +881,7 @@ fn handle_request(
             let blockid = query.chain().tx_confirming_block(&hash);
             let ttl = ttl_by_depth(blockid.as_ref().map(|b| b.height), query);
 
-            let tx = prepare_txs(vec![(tx, blockid)], query, config).remove(0);
+            let tx = prepare_txs(vec![(tx, blockid)], query, config)?.remove(0);
 
             json_response(tx, ttl)
         }
@@ -1067,7 +1068,7 @@ fn handle_request(
                     .map(|(tx, blockid)| (tx, Some(blockid))),
             );
 
-            json_response(prepare_txs(txs, query, config), TTL_SHORT)
+            json_response(prepare_txs(txs, query, config)?, TTL_SHORT)
         }
 
         #[cfg(feature = "liquid")]
@@ -1089,7 +1090,7 @@ fn handle_request(
                 .map(|(tx, blockid)| (tx, Some(blockid)))
                 .collect();
 
-            json_response(prepare_txs(txs, query, config), TTL_SHORT)
+            json_response(prepare_txs(txs, query, config)?, TTL_SHORT)
         }
 
         #[cfg(feature = "liquid")]
@@ -1103,7 +1104,7 @@ fn handle_request(
                 .map(|tx| (tx, None))
                 .collect();
 
-            json_response(prepare_txs(txs, query, config), TTL_SHORT)
+            json_response(prepare_txs(txs, query, config)?, TTL_SHORT)
         }
 
         #[cfg(feature = "liquid")]
