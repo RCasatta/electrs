@@ -82,9 +82,24 @@ fn bitcoind_fetcher(
         spawn_thread("bitcoind_fetcher", move || {
             for entries in new_headers.chunks(100) {
                 let blockhashes: Vec<BlockHash> = entries.iter().map(|e| *e.hash()).collect();
-                let blocks = daemon
-                    .getblocks(&blockhashes)
-                    .expect("failed to get blocks from bitcoind");
+
+                let mut attempts = 5;
+                let blocks = loop {
+                    attempts -= 1;
+
+                    match daemon.getblocks(&blockhashes) {
+                        Ok(blocks) => break blocks,
+                        Err(e) => {
+                            // There is a small chance the node returns the header but didn't finish to index the block
+                            log::warn!("getblocks failing with: {e:?} trying {attempts} more time")
+                        }
+                    }
+                    if attempts == 0 {
+                        panic!("failed to get blocks from bitcoind")
+                    }
+                    thread::sleep(std::time::Duration::from_secs(1));
+                };
+
                 assert_eq!(blocks.len(), entries.len());
                 let block_entries: Vec<BlockEntry> = blocks
                     .into_iter()
