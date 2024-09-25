@@ -7,6 +7,7 @@ use bitcoin::consensus::encode::{deserialize, Decodable};
 #[cfg(feature = "liquid")]
 use elements::encode::{deserialize, Decodable};
 
+use core::panic;
 use std::collections::HashMap;
 use std::fs;
 use std::io::Cursor;
@@ -90,8 +91,15 @@ fn bitcoind_fetcher(
                     match daemon.getblocks(&blockhashes) {
                         Ok(blocks) => break blocks,
                         Err(e) => {
-                            // There is a small chance the node returns the header but didn't finish to index the block
-                            log::warn!("getblocks failing with: {e:?} trying {attempts} more time")
+                            let err_msg = format!("{e:?}");
+                            if err_msg.contains("Block not found on disk") {
+                                // There is a small chance the node returns the header but didn't finish to index the block
+                                log::warn!(
+                                    "getblocks failing with: {e:?} trying {attempts} more time"
+                                )
+                            } else {
+                                panic!("failed to get blocks from bitcoind: {}", err_msg);
+                            }
                         }
                     }
                     if attempts == 0 {
